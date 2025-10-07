@@ -1,92 +1,80 @@
-import React from 'react';
-import './App.css';
-import {Bar} from 'react-chartjs-2';
-import DataSeed from "./data";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  BarElement
-} from 'chart.js';
+import React, {useEffect, useState} from "react";
+import Papa from "papaparse";
+import {Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ChartData} from "chart.js";
+import {Bar} from "react-chartjs-2";
 
-function App() {
-  ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    PointElement,
-    LineElement,
-    Title,
-    Tooltip,
-    Legend,
-    BarElement
-  );
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-  const {question, answer} = DataSeed();
+const App: React.FC = () => {
+  const [allData, setAllData] = useState<Record<string, ChartData<"bar">>>({});
 
-  const chartDataList = Array.from(question.entries()).map(([questionId, options]) => {
-    const counts = new Array(options.length).fill(0)
-    const total = answer.length
+  useEffect(() => {
+    // CSV đặt trong public/responses.csv
+    fetch("/responses.csv")
+      .then(res => res.text())
+      .then(csvText => {
+        const parsed = Papa.parse(csvText, {header: true});
+        const headers = parsed.meta.fields || [];
 
-    answer.forEach((ans) => {
-      const arr = ans.get(questionId)
-      if (arr) {
-        arr.forEach((val, idx) => {
-          if (val) counts[idx]++
-        })
-      }
-    })
+        const result: Record<string, ChartData<"bar">> = {};
 
-    const percentages = counts.map((c) => ((c / total) * 100).toFixed(1))
+        headers.forEach(header => {
+          if (header === "Dấu thời gian") return; // bỏ cột thời gian
 
-    return {
-      id: questionId,
-      labels: options,
-      data: percentages,
-    }
-  })
+          const answers: string[] = parsed.data.map((row: any) => row[header]?.trim() || "");
+          const total = answers.length;
+
+          const counts: Record<string, number> = {};
+          answers.forEach(ans => {
+            if (!ans) return;
+            // Nếu nhiều phương án, split bằng ";"
+            ans.split(";").forEach(option => {
+              const key = option.trim();
+              if (!key) return;
+              if (!counts[key]) counts[key] = 0;
+              counts[key]++;
+            });
+          });
+
+          const labels = Object.keys(counts);
+          const values = labels.map(l => Number(((counts[l] / total) * 100).toFixed(2)));
+
+          result[header] = {
+            labels,
+            datasets: [
+              {
+                label: "% trả lời",
+                data: values,
+                backgroundColor: labels.map((_, i) => `hsl(${(i * 60) % 360}, 70%, 50%)`),
+              },
+            ],
+          };
+        });
+
+        setAllData(result);
+      });
+  }, []);
 
   return (
-    <div className="flex flex-col gap-10 p-6">
-      {chartDataList.map((q) => (
-        <div key={q.id} className="w-full">
-          <h2 className="text-lg font-semibold mb-2">
-            Câu {q.id}
-          </h2>
+    <div style={{padding: "20px"}}>
+      <h1>Thống kê Google Form</h1>
+      {Object.entries(allData).map(([question, chartData]) => (
+        <div key={question} style={{marginBottom: "50px"}}>
+          <h3>{question}</h3>
           <Bar
-            data={{
-              labels: q.labels,
-              datasets: [
-                {
-                  label: "% người chọn",
-                  data: q.data,
-                  backgroundColor: "rgba(75,192,192,0.6)",
-                },
-              ],
-            }}
+            data={chartData}
             options={{
               responsive: true,
               plugins: {
                 legend: {position: "top"},
-                title: {display: true, text: `Câu hỏi ${q.id}`},
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  max: 100,
-                  ticks: {callback: (val) => val + "%"},
-                },
+                title: {display: false},
               },
             }}
           />
         </div>
       ))}
     </div>
-  )
-}
+  );
+};
 
 export default App;
