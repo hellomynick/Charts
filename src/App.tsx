@@ -1,7 +1,6 @@
 import React from 'react';
-import logo from './logo.svg';
 import './App.css';
-import {Bar, Line} from 'react-chartjs-2';
+import {Bar} from 'react-chartjs-2';
 import DataSeed from "./data";
 import {
   Chart as ChartJS,
